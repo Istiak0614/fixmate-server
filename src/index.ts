@@ -7,6 +7,7 @@ import express, { type NextFunction, type Request, type Response } from "express
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import dotenv from "dotenv";
+import { connectDB } from "./config/db";
 
 dotenv.config({ quiet: true }); // quiet: hides dotenv's startup log
 
@@ -46,8 +47,16 @@ app.get("/", (_req: Request, res: Response) => {
   res.send("FixMate server is running 🔧");
 });
 
-app.get("/api/health", (_req: Request, res: Response) => {
-  res.json({ ok: true, service: "fixmate-server", time: new Date().toISOString() });
+// Health check: also pings MongoDB, so one URL proves the server AND the database work.
+app.get("/api/health", async (_req: Request, res: Response) => {
+  try {
+    const db = await connectDB();
+    await db.command({ ping: 1 });
+    res.json({ ok: true, service: "fixmate-server", db: "connected", time: new Date().toISOString() });
+  } catch (error) {
+    console.error("❌ MongoDB health check failed:", error);
+    res.status(503).json({ ok: false, service: "fixmate-server", db: "disconnected" });
+  }
 });
 
 /* ------------------------------ 404 & errors ------------------------------ */
