@@ -11,6 +11,7 @@ import { connectDB } from "./config/db";
 import authRoutes from "./routes/auth.routes";
 import userRoutes from "./routes/user.routes";
 import serviceRoutes from "./routes/service.routes";
+import adminRoutes from "./routes/admin.routes";
 
 dotenv.config({ quiet: true }); // quiet: hides dotenv's startup log
 
@@ -66,6 +67,7 @@ app.get("/api/health", async (_req: Request, res: Response) => {
 app.use("/api", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/services", serviceRoutes);
+app.use("/api/admin", adminRoutes);
 /* ------------------------------ 404 & errors ------------------------------ */
 app.use((req: Request, res: Response) => {
   res.status(404).json({ message: `Route not found: ${req.method} ${req.originalUrl}` });
