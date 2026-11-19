@@ -71,8 +71,8 @@ export async function getCollections() {
 /** createIndex is idempotent: running it again on an existing index does nothing. */
 async function createIndexes(db: Db) {
   await Promise.all([
-    // users: email links data across collections
-    db.collection("user").createIndex({ email: 1 }, { unique: true }),
+    // users: BetterAuth creates its own unique index on user.email ("user_email_uidx"),
+    // so we don't create one here (two indexes on the same key would conflict).
 
     // services: public listing query + "my services"
     db.collection("services").createIndex({ approvalStatus: 1, isAvailable: 1, createdAt: -1 }),
