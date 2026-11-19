@@ -59,3 +59,54 @@ export function validateServiceInput(body: Record<string, unknown> | undefined):
     },
   };
 }
+
+/* ------------------------------- Repair requests ------------------------------- */
+
+/** The fields a customer sends. Name, email, service and technician info come from the server. */
+export type BookingInput = {
+  serviceId: string;
+  customerPhone: string;
+  address: string;
+  preferredDate: Date;
+  problemDescription: string;
+};
+
+const PHONE_REGEX = /^\+?[0-9][0-9\s-]{6,18}$/; // e.g. 01712345678, +880 1712-345678
+const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/; // "YYYY-MM-DD" from <input type="date">
+
+export function validateBookingInput(body: Record<string, unknown> | undefined): {
+  data?: BookingInput;
+  error?: string;
+} {
+  const serviceId = text(body?.serviceId);
+  const customerPhone = text(body?.customerPhone);
+  const address = text(body?.address);
+  const dateText = text(body?.preferredDate);
+  const problemDescription = text(body?.problemDescription);
+
+  if (!serviceId) return { error: "Service is required" };
+  if (!PHONE_REGEX.test(customerPhone)) return { error: "Enter a valid phone number" };
+  if (address.length < 5) return { error: "Enter the service or pickup address" };
+
+  // Preferred date: today or later. Stored as midnight UTC of the chosen day.
+  // We allow "yesterday in UTC" too, because a customer's "today" can be behind UTC (other time zones).
+  const preferredDate = new Date(`${dateText}T00:00:00.000Z`);
+  // (the last check rejects impossible days like 2026-02-30, which JavaScript would turn into March 2)
+  if (
+    !DATE_REGEX.test(dateText) ||
+    Number.isNaN(preferredDate.getTime()) ||
+    preferredDate.toISOString().slice(0, 10) !== dateText
+  ) {
+    return { error: "Choose a preferred date" };
+  }
+  const todayUtc = new Date(new Date().toISOString().slice(0, 10) + "T00:00:00.000Z");
+  const oneDay = 24 * 60 * 60 * 1000;
+  if (preferredDate.getTime() < todayUtc.getTime() - oneDay) {
+    return { error: "Preferred date must be today or a future date" };
+  }
+
+  if (problemDescription.length < 20) return { error: "Describe the problem in at least 20 characters" };
+  if (problemDescription.length > 1000) return { error: "Problem description is too long (max 1000 characters)" };
+
+  return { data: { serviceId, customerPhone, address, preferredDate, problemDescription } };
+}
