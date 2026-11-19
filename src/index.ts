@@ -8,6 +8,7 @@ import cors from "cors";
 import cookieParser from "cookie-parser";
 import dotenv from "dotenv";
 import { connectDB } from "./config/db";
+import authRoutes from "./routes/auth.routes";
 
 dotenv.config({ quiet: true }); // quiet: hides dotenv's startup log
 
@@ -59,15 +60,25 @@ app.get("/api/health", async (_req: Request, res: Response) => {
   }
 });
 
+// Feature routes (more are added step by step)
+app.use("/api", authRoutes);
 /* ------------------------------ 404 & errors ------------------------------ */
 app.use((req: Request, res: Response) => {
   res.status(404).json({ message: `Route not found: ${req.method} ${req.originalUrl}` });
 });
 
 // Express 5 forwards errors from async handlers here automatically.
-app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
+// Express 5 forwards errors from async handlers here automatically.
+// Errors from express.json() carry a status (e.g. 400 for a broken JSON body) -> keep it.
+type HttpError = Error & { status?: number; type?: string };
+app.use((err: HttpError, _req: Request, res: Response, _next: NextFunction) => {
+  if (err.type === "entity.parse.failed") {
+    res.status(400).json({ message: "Invalid JSON in request body" });
+    return;
+  }
   console.error("❌", err);
-  res.status(500).json({ message: "Internal server error" });
+  const status = err.status && err.status < 500 ? err.status : 500;
+  res.status(status).json({ message: status === 500 ? "Internal server error" : err.message });
 });
 
 /* --------------------------------- Start ---------------------------------- */
