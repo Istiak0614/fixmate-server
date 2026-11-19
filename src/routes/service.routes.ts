@@ -1,18 +1,21 @@
 /**
  * Service routes (mounted at /api/services).
- *   POST   /api/services                   verifyToken + verifyTechnician -> add a service (always "pending")
- *   GET    /api/services/mine              verifyToken + verifyTechnician -> the logged-in technician's services
+ *   GET    /api/services                   public -> approved + available, search/filter/sort/page (Challenge 1)
+ *   GET    /api/services/featured          public -> 6 latest approved + available (Home page)
+ *   GET    /api/services/mine              verifyToken + verifyTechnician -> my services
+ *   GET    /api/services/:id               public -> details + technician summary (404 if not public)
+ *   POST   /api/services                   verifyToken + verifyTechnician -> add (always "pending")
  *   PATCH  /api/services/:id               verifyToken + verifyTechnician (owner) -> edit, back to "pending"
  *   PATCH  /api/services/:id/availability  verifyToken + verifyTechnician (owner) -> turn on/off
  *   DELETE /api/services/:id               verifyToken + verifyTechnician (owner) -> delete
- * Coming next: public list + details (Server 9).
- * NOTE: "/mine" must stay ABOVE "GET /:id" (Server 9), or Express would treat "mine" as an id.
+ * NOTE: "/featured" and "/mine" must stay ABOVE "GET /:id", or Express would treat them as an id.
  */
 import { Router, type Request, type Response } from "express";
 import { getCollections } from "../config/db";
 import { verifyTechnician, verifyToken } from "../middlewares/auth";
 import { validateServiceInput } from "../utils/validate";
 import { toObjectId } from "../utils/objectId";
+import { buildServiceQuery } from "../utils/serviceQuery";
 import type { ServiceDoc } from "../types";
 
 const router = Router();
@@ -39,6 +42,48 @@ async function findOwnService(req: Request, res: Response) {
   }
   return service;
 }
+
+/* --------------------------------- Public --------------------------------- */
+
+// Browse Services (Challenge 1 + pagination): one aggregation returns the page AND the total count
+router.get("/", async (req: Request, res: Response) => {
+  const { match, sort, page, skip, limit } = buildServiceQuery(req.query);
+  const { services } = await getCollections();
+
+  const [result] = await services
+    .aggregate<{ items: ServiceDoc[]; total: { count: number }[] }>([
+      { $match: match },
+      {
+        $facet: {
+          items: [{ $sort: sort }, { $skip: skip }, { $limit: limit }, { $project: { description: 0 } }],
+          total: [{ $count: "count" }],
+        },
+      },
+    ])
+    .toArray();
+
+  const total = result?.total[0]?.count ?? 0;
+  res.json({
+    services: result?.items ?? [],
+    total,
+    page,
+    limit,
+    totalPages: Math.max(1, Math.ceil(total / limit)),
+  });
+});
+
+// Home page: the 6 latest approved + available services
+router.get("/featured", async (_req: Request, res: Response) => {
+  const { services } = await getCollections();
+  const featured = await services
+    .find({ approvalStatus: "approved", isAvailable: true }, { projection: { description: 0 } })
+    .sort({ createdAt: -1 })
+    .limit(6)
+    .toArray();
+  res.json(featured);
+});
+
+/* ------------------------------- Technician ------------------------------- */
 
 router.post("/", verifyToken, verifyTechnician, async (req: Request, res: Response) => {
   const { data, error } = validateServiceInput(req.body);
@@ -77,6 +122,42 @@ router.get("/mine", verifyToken, verifyTechnician, async (req: Request, res: Res
     .toArray();
   res.json(myServices);
 });
+
+/* ------------------------- Public details (keep after /mine) ------------------------- */
+
+// Service details + technician summary. Not approved / not available / missing -> 404 (Not Found page)
+router.get("/:id", async (req: Request, res: Response) => {
+  const _id = toObjectId(req.params.id);
+  if (!_id) {
+    res.status(404).json({ message: "Service not found" });
+    return;
+  }
+
+  const { services, users } = await getCollections();
+  const service = await services.findOne({ _id, approvalStatus: "approved", isAvailable: true });
+  if (!service) {
+    res.status(404).json({ message: "Service not found" });
+    return;
+  }
+
+  const technician = await users.findOne(
+    { email: service.technicianEmail },
+    { projection: { _id: 0, name: 1, image: 1, area: 1, bio: 1, plan: 1 } }
+  );
+
+  res.json({
+    ...service,
+    technician: {
+      name: technician?.name ?? service.technicianName,
+      image: technician?.image ?? null,
+      area: technician?.area ?? "",
+      bio: technician?.bio ?? "",
+      plan: technician?.plan ?? "free",
+    },
+  });
+});
+
+/* ------------------------------- Technician ------------------------------- */
 
 // Edit -> approvalStatus goes back to "pending" (the admin must re-approve the new content)
 router.patch("/:id", verifyToken, verifyTechnician, async (req: Request, res: Response) => {
