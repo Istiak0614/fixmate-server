@@ -14,6 +14,7 @@ import serviceRoutes from "./routes/service.routes";
 import adminRoutes from "./routes/admin.routes";
 import bookingRoutes from "./routes/booking.routes";
 import paymentRoutes from "./routes/payment.routes";
+import { stripeWebhook } from "./routes/webhook";
 
 dotenv.config({ quiet: true }); // quiet: hides dotenv's startup log
 
@@ -41,8 +42,9 @@ app.use(
 );
 
 /* ----------------------------- Stripe webhook ----------------------------- */
-// IMPORTANT (Server step 15): the Stripe webhook route is registered HERE, with express.raw(),
-// BEFORE express.json(). Stripe's signature check needs the untouched raw body.
+// IMPORTANT: registered with express.raw() BEFORE express.json(), because Stripe's signature
+// check needs the untouched raw body. (express.json() would turn it into an object first.)
+app.post("/api/payments/webhook", express.raw({ type: "application/json" }), stripeWebhook);
 
 /* ----------------------------- Body & cookies ----------------------------- */
 app.use(express.json());
