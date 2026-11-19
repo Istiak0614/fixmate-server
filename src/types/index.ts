@@ -92,6 +92,7 @@ export interface BookingDoc {
   statusHistory: StatusHistoryEntry[]; // (optional feature) Job Timeline Tracker
   rating?: number; // (optional feature) Rating & Review, 1-5
   review?: string; // (optional feature) Rating & Review
+  checkoutSessionId?: string; // last Stripe Checkout Session, reused while still open (prevents paying twice)
 }
 
 /** 4. payments */
