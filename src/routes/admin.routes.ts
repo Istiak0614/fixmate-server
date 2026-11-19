@@ -4,13 +4,15 @@
  *   GET   /api/admin/stats           -> overview cards + chart data
  *   GET   /api/admin/users           -> all users
  *   PATCH /api/admin/users/:id/role  -> change a user's role (never your own)
- * Coming next: services approval (Server 8), bookings (Server 12), payments (Server 14).
+ *   GET   /api/admin/services?status=pending|approved|rejected  -> all services, pending first
+ *   PATCH /api/admin/services/:id/approval  -> approve or reject a service
+ * Coming next: bookings (Server 12), payments (Server 14).
  */
 import { Router, type Request, type Response } from "express";
 import { getCollections } from "../config/db";
 import { verifyAdmin, verifyToken } from "../middlewares/auth";
 import { toObjectId } from "../utils/objectId";
-import type { Role } from "../types";
+import type { ApprovalStatus, Role } from "../types";
 
 const router = Router();
 router.use(verifyToken, verifyAdmin); // protects every route below
@@ -116,6 +118,50 @@ router.patch("/users/:id/role", async (req: Request, res: Response) => {
     return;
   }
   res.json({ success: true, role, message: `Role changed to ${role}` });
+});
+
+/* ------------------------------- Service approval ------------------------------- */
+const APPROVAL_STATUSES: ApprovalStatus[] = ["pending", "approved", "rejected"];
+
+// All services from all technicians. Optional ?status= filter.
+// Pending services always come first, so the admin finds them instantly.
+router.get("/services", async (req: Request, res: Response) => {
+  const status = req.query.status as ApprovalStatus | undefined;
+  const match = status && APPROVAL_STATUSES.includes(status) ? { approvalStatus: status } : {};
+
+  const { services } = await getCollections();
+  const list = await services
+    .aggregate([
+      { $match: match },
+      // pending -> 0, approved -> 1, rejected -> 2 (used only for sorting)
+      { $addFields: { statusOrder: { $indexOfArray: [APPROVAL_STATUSES, "$approvalStatus"] } } },
+      { $sort: { statusOrder: 1, createdAt: -1 } },
+      { $project: { statusOrder: 0 } },
+    ])
+    .toArray();
+  res.json(list);
+});
+
+router.patch("/services/:id/approval", async (req: Request, res: Response) => {
+  const _id = toObjectId(req.params.id);
+  if (!_id) {
+    res.status(400).json({ message: "Invalid service id" });
+    return;
+  }
+
+  const approvalStatus = req.body?.approvalStatus as ApprovalStatus;
+  if (approvalStatus !== "approved" && approvalStatus !== "rejected") {
+    res.status(400).json({ message: "approvalStatus must be approved or rejected" });
+    return;
+  }
+
+  const { services } = await getCollections();
+  const result = await services.updateOne({ _id }, { $set: { approvalStatus } });
+  if (result.matchedCount === 0) {
+    res.status(404).json({ message: "Service not found" });
+    return;
+  }
+  res.json({ success: true, approvalStatus, message: `Service ${approvalStatus}` });
 });
 
 export default router;
