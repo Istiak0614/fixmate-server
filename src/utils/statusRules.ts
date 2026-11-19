@@ -27,3 +27,5 @@ export function canChangeStatus(from: BookingStatus, to: BookingStatus, actor: A
 
 /** Active = still in progress somewhere in the pipeline (used for the duplicate-request rule). */
 export const ACTIVE_STATUSES: BookingStatus[] = ["requested", "accepted", "in-progress"];
+/** "accepted" -> "an accepted", "requested" -> "a requested" (for readable error messages) */
+export const withArticle = (word: string) => `${/^[aeiou]/i.test(word) ? "an" : "a"} ${word}`;

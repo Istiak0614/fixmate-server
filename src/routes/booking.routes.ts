@@ -3,17 +3,20 @@
  *   POST  /api/bookings             verifyToken + verifyCustomer -> send a repair request
  *   GET   /api/bookings/my          verifyToken + verifyCustomer -> my bookings
  *   PATCH /api/bookings/:id/cancel  verifyToken + verifyCustomer (owner) -> cancel, only while "requested"
- * Coming next: technician jobs + status pipeline (Server 11).
+ *   GET   /api/bookings/technician  verifyToken + verifyTechnician -> my jobs (?status= filter)
+ *   PATCH /api/bookings/:id/status  verifyToken + verifyTechnician (owner) -> move the job forward (Challenge 3)
  */
 import { Router, type Request, type Response } from "express";
 import { getCollections } from "../config/db";
-import { verifyCustomer, verifyToken } from "../middlewares/auth";
+import { verifyCustomer, verifyTechnician, verifyToken } from "../middlewares/auth";
 import { toObjectId } from "../utils/objectId";
 import { validateBookingInput } from "../utils/validate";
-import { ACTIVE_STATUSES, canChangeStatus } from "../utils/statusRules";
-import type { BookingDoc } from "../types";
+import { ACTIVE_STATUSES, canChangeStatus, withArticle } from "../utils/statusRules";
+import type { BookingDoc, BookingStatus } from "../types";
 
 const router = Router();
+
+const capitalize = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 
 // Send a repair request. Only customers reach this (verifyCustomer), so technicians and
 // admins can never send requests — the business rule is enforced on the server.
@@ -107,7 +110,7 @@ router.patch("/:id/cancel", verifyToken, verifyCustomer, async (req: Request, re
     return;
   }
   if (!canChangeStatus(booking.status, "cancelled", "customer")) {
-    res.status(400).json({ message: `A ${booking.status} job cannot be cancelled` });
+    res.status(400).json({ message: `${capitalize(withArticle(booking.status))} job cannot be cancelled` });
     return;
   }
 
@@ -122,6 +125,88 @@ router.patch("/:id/cancel", verifyToken, verifyCustomer, async (req: Request, re
     return;
   }
   res.json({ success: true, message: "Request cancelled" });
+});
+
+/* ------------------------------- Technician ------------------------------- */
+
+const ALL_STATUSES: BookingStatus[] = ["requested", "accepted", "rejected", "in-progress", "completed", "cancelled"];
+
+// The technician's jobs: ONLY bookings where technicianEmail is the logged-in technician
+router.get("/technician", verifyToken, verifyTechnician, async (req: Request, res: Response) => {
+  const status = req.query.status as BookingStatus | undefined;
+  const filter = {
+    technicianEmail: req.user!.email,
+    ...(status && ALL_STATUSES.includes(status) && { status }), // ?status=all or nothing -> every job
+  };
+
+  const { bookings } = await getCollections();
+  const jobs = await bookings.find(filter).sort({ createdAt: -1 }).toArray();
+  res.json(jobs);
+});
+
+const SUCCESS_MESSAGES: Partial<Record<BookingStatus, string>> = {
+  accepted: "Job accepted",
+  rejected: "Job rejected",
+  "in-progress": "Work started",
+  completed: "Job marked as completed",
+};
+
+// Challenge 3: only the technician who owns the job, only the moves in the status table,
+// and "completed" needs a finalAmount greater than 0.
+router.patch("/:id/status", verifyToken, verifyTechnician, async (req: Request, res: Response) => {
+  const _id = toObjectId(req.params.id);
+  if (!_id) {
+    res.status(400).json({ message: "Invalid booking id" });
+    return;
+  }
+
+  const nextStatus = req.body?.status as BookingStatus;
+  if (!ALL_STATUSES.includes(nextStatus)) {
+    res.status(400).json({ message: "Invalid status" });
+    return;
+  }
+
+  const { bookings } = await getCollections();
+  const booking = await bookings.findOne({ _id });
+  if (!booking) {
+    res.status(404).json({ message: "Booking not found" });
+    return;
+  }
+
+  // 1. Owner check: only the technician of THIS job
+  if (booking.technicianEmail !== req.user!.email) {
+    res.status(403).json({ message: "Forbidden: this job belongs to another technician" });
+    return;
+  }
+
+  // 2. Pipeline check: e.g. requested -> completed or changing a cancelled job is refused
+  if (!canChangeStatus(booking.status, nextStatus, "technician")) {
+    res.status(400).json({ message: `Not allowed: ${withArticle(booking.status)} job cannot become ${nextStatus}` });
+    return;
+  }
+
+  // 3. Completing needs the final amount (> 0). Rounded to cents. This is what the customer pays.
+  const update: Partial<BookingDoc> = { status: nextStatus };
+  if (nextStatus === "completed") {
+    const finalAmount = Number(req.body?.finalAmount);
+    if (!Number.isFinite(finalAmount) || finalAmount <= 0) {
+      res.status(400).json({ message: "Final amount must be a number greater than 0" });
+      return;
+    }
+    update.finalAmount = Math.round(finalAmount * 100) / 100;
+  }
+
+  // The filter repeats the CURRENT status: if the customer cancelled a moment ago, nothing changes
+  const result = await bookings.updateOne(
+    { _id, status: booking.status },
+    { $set: update, $push: { statusHistory: { status: nextStatus, changedAt: new Date() } } }
+  );
+  if (result.modifiedCount === 0) {
+    res.status(409).json({ message: "This job was just updated by someone else. Please refresh." });
+    return;
+  }
+
+  res.json({ success: true, status: nextStatus, message: SUCCESS_MESSAGES[nextStatus] ?? "Status updated" });
 });
 
 export default router;
