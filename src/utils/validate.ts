@@ -110,3 +110,30 @@ export function validateBookingInput(body: Record<string, unknown> | undefined):
 
   return { data: { serviceId, customerPhone, address, preferredDate, problemDescription } };
 }
+
+/* ---------------------------------- Profile ---------------------------------- */
+
+export type ProfileInput = { name: string; phone: string; area: string; bio: string; image?: string };
+
+// Photos are uploaded to ImgBB by the client; we only accept ImgBB's own image links.
+const IMGBB_URL_REGEX = /^https:\/\/i\.ibb\.co\/\S+$/;
+
+export function validateProfileInput(body: Record<string, unknown> | undefined): {
+  data?: ProfileInput;
+  error?: string;
+} {
+  const name = text(body?.name);
+  const phone = text(body?.phone);
+  const area = text(body?.area);
+  const bio = text(body?.bio);
+  const image = text(body?.image);
+
+  if (name.length < 2 || name.length > 50) return { error: "Name must be 2 to 50 characters" };
+  if (phone && !PHONE_REGEX.test(phone)) return { error: "Enter a valid phone number" }; // optional
+  if (area.length > 60) return { error: "Area is too long (max 60 characters)" };
+  if (bio.length > 300) return { error: "Bio is too long (max 300 characters)" };
+  if (image && !IMGBB_URL_REGEX.test(image)) return { error: "Upload the photo again" };
+
+  // image is only changed when a new one was uploaded
+  return { data: { name, phone, area, bio, ...(image && { image }) } };
+}

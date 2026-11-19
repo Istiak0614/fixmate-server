@@ -6,13 +6,14 @@
  *   PATCH /api/admin/users/:id/role  -> change a user's role (never your own)
  *   GET   /api/admin/services?status=pending|approved|rejected  -> all services, pending first
  *   PATCH /api/admin/services/:id/approval  -> approve or reject a service
- * Coming next: bookings (Server 12), payments (Server 14).
+ *   GET   /api/admin/bookings?status=...  -> every booking on the platform (read-only)
+ * Coming next: payments (Server 14).
  */
 import { Router, type Request, type Response } from "express";
 import { getCollections } from "../config/db";
 import { verifyAdmin, verifyToken } from "../middlewares/auth";
 import { toObjectId } from "../utils/objectId";
-import type { ApprovalStatus, Role } from "../types";
+import type { ApprovalStatus, BookingStatus, Role } from "../types";
 
 const router = Router();
 router.use(verifyToken, verifyAdmin); // protects every route below
@@ -162,6 +163,18 @@ router.patch("/services/:id/approval", async (req: Request, res: Response) => {
     return;
   }
   res.json({ success: true, approvalStatus, message: `Service ${approvalStatus}` });
+});
+/* ---------------------------------- Bookings ---------------------------------- */
+const BOOKING_STATUSES: BookingStatus[] = ["requested", "accepted", "rejected", "in-progress", "completed", "cancelled"];
+
+// Every booking (read-only for the admin), newest first, optional ?status= filter
+router.get("/bookings", async (req: Request, res: Response) => {
+  const status = req.query.status as BookingStatus | undefined;
+  const filter = status && BOOKING_STATUSES.includes(status) ? { status } : {};
+
+  const { bookings } = await getCollections();
+  const list = await bookings.find(filter).sort({ createdAt: -1 }).toArray();
+  res.json(list);
 });
 
 export default router;
