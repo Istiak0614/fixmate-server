@@ -7,7 +7,7 @@
  *   GET   /api/admin/services?status=pending|approved|rejected  -> all services, pending first
  *   PATCH /api/admin/services/:id/approval  -> approve or reject a service
  *   GET   /api/admin/bookings?status=...  -> every booking on the platform (read-only)
- * Coming next: payments (Server 14).
+ *   GET   /api/admin/payments  -> every payment + total revenue
  */
 import { Router, type Request, type Response } from "express";
 import { getCollections } from "../config/db";
@@ -175,6 +175,15 @@ router.get("/bookings", async (req: Request, res: Response) => {
   const { bookings } = await getCollections();
   const list = await bookings.find(filter).sort({ createdAt: -1 }).toArray();
   res.json(list);
+});
+/* ---------------------------------- Payments ---------------------------------- */
+
+// Transactions page: every payment (newest first) and the total revenue shown above the table
+router.get("/payments", async (_req: Request, res: Response) => {
+  const { payments } = await getCollections();
+  const list = await payments.find({}).sort({ paidAt: -1 }).toArray();
+  const totalRevenue = Math.round(list.reduce((sum, p) => sum + p.amount, 0) * 100) / 100;
+  res.json({ payments: list, totalRevenue });
 });
 
 export default router;
