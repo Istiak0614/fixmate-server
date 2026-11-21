@@ -10,7 +10,7 @@ Express + TypeScript API for **FixMate**, a smart device and home appliance repa
 | Role | Email | Password |
 |---|---|---|
 | Admin | `admin@fixmate.com` | `Admin123` |
-| Technician (Pro) | `rafi.tech@fixmate.demo` | `YOUR_DEMO_PASSWORD` |
+| Technician (Pro) | `rafi.tech@fixmate.demo` | `Demo123` |
 | Customer | `nusrat@fixmate.demo` | `Demo123` |
 
 The admin can only be created by the seed script (`npm run seed`); sign-up never accepts the admin role.
