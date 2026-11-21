@@ -14,6 +14,7 @@ import serviceRoutes from "./routes/service.routes";
 import adminRoutes from "./routes/admin.routes";
 import bookingRoutes from "./routes/booking.routes";
 import paymentRoutes from "./routes/payment.routes";
+import subscriptionRoutes from "./routes/subscription.routes";
 import { stripeWebhook } from "./routes/webhook";
 
 dotenv.config({ quiet: true }); // quiet: hides dotenv's startup log
@@ -74,6 +75,7 @@ app.use("/api/services", serviceRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/bookings", bookingRoutes);
 app.use("/api/payments", paymentRoutes);
+app.use("/api/subscriptions", subscriptionRoutes);
 /* ------------------------------ 404 & errors ------------------------------ */
 app.use((req: Request, res: Response) => {
   res.status(404).json({ message: `Route not found: ${req.method} ${req.originalUrl}` });

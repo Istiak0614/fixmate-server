@@ -41,6 +41,7 @@ export interface UserDoc {
   bio?: string;
   plan?: "free" | "pro"; // (optional feature) Pro Technician Plan
   stripeSubscriptionId?: string | null; // (optional feature) Pro Technician Plan
+  stripeCustomerId?: string; // (optional feature) Pro Technician Plan
   createdAt?: Date; // set by BetterAuth
   updatedAt?: Date; // set by BetterAuth
 }
@@ -58,6 +59,7 @@ export interface ServiceDoc {
   serviceArea: string;
   technicianName: string;
   technicianEmail: string;
+  technicianPlan?: "free" | "pro"; // (optional feature) copy of the owner's plan, for the "Verified Pro" badge
   approvalStatus: ApprovalStatus;
   isAvailable: boolean;
   createdAt: Date;
@@ -108,7 +110,7 @@ export interface PaymentDoc {
   amount: number;
   currency: "usd";
   transactionId: string; // Stripe payment_intent id
-  stripeSessionId: string; // Stripe Checkout Session id — UNIQUE (never save a payment twice)
+  stripeSessionId: string; // Stripe Checkout Session id (Pro plan: invoice id) — UNIQUE (never save a payment twice)
   paymentStatus: "paid";
   paidAt: Date;
 }

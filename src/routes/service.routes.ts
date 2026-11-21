@@ -12,6 +12,7 @@
  */
 import { Router, type Request, type Response } from "express";
 import { getCollections } from "../config/db";
+import { FREE_SERVICE_LIMIT } from "../utils/subscription";
 import { verifyTechnician, verifyToken } from "../middlewares/auth";
 import { validateServiceInput } from "../utils/validate";
 import { toObjectId } from "../utils/objectId";
@@ -92,19 +93,31 @@ router.post("/", verifyToken, verifyTechnician, async (req: Request, res: Respon
     return;
   }
 
-  // (The Free-plan limit of 3 services is added in Server step 16 with the Pro plan.)
+  const { services } = await getCollections();
+
+  // Pro Technician Plan: the Free plan can have at most 3 services (any status)
+  if (req.user!.plan !== "pro") {
+    const count = await services.countDocuments({ technicianEmail: req.user!.email });
+    if (count >= FREE_SERVICE_LIMIT) {
+      res.status(403).json({
+        code: "PLAN_LIMIT",
+        message: `The Free plan allows ${FREE_SERVICE_LIMIT} services. Upgrade to Pro for unlimited services.`,
+      });
+      return;
+    }
+  }
 
   const service: ServiceDoc = {
     ...data,
     // Owner info comes from the verified token, NEVER from the request body
     technicianName: req.user!.name,
     technicianEmail: req.user!.email,
+    technicianPlan: req.user!.plan, // for the "Verified Pro" badge on cards
     approvalStatus: "pending", // only an admin can approve
     isAvailable: true,
     createdAt: new Date(),
   };
 
-  const { services } = await getCollections();
   const result = await services.insertOne(service);
 
   res.status(201).json({
