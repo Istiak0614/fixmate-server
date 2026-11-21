@@ -16,7 +16,6 @@ if (!process.env.VERCEL) {
 }
 import type { BookingDoc, PaymentDoc, ServiceDoc, UserDoc } from "../types";
 
-const DB_NAME = process.env.DB_NAME || "fixmate";
 
 type MongoCache = {
   promise: Promise<MongoClient> | null; // the connection in progress / done
@@ -44,13 +43,22 @@ export async function connectDB(): Promise<Db> {
   }
 
   const client = await cache.promise;
-  const db = client.db(DB_NAME);
+    // read here (not at import time) so values loaded by dotenv later are used
+  const db = client.db(process.env.DB_NAME || "fixmate");
 
   if (!cache.indexesReady) {
     await createIndexes(db);
     cache.indexesReady = true;
   }
   return db;
+}
+/** Close the connection (only for one-off scripts like the seed; the server keeps it open). */
+export async function closeDB() {
+  if (!cache.promise) return;
+  const client = await cache.promise;
+  await client.close();
+  cache.promise = null;
+  cache.indexesReady = false;
 }
 
 /**
