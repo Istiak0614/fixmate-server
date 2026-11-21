@@ -3,6 +3,7 @@
  *   POST  /api/bookings             verifyToken + verifyCustomer -> send a repair request
  *   GET   /api/bookings/my          verifyToken + verifyCustomer -> my bookings
  *   PATCH /api/bookings/:id/cancel  verifyToken + verifyCustomer (owner) -> cancel, only while "requested"
+ *   PATCH /api/bookings/:id/review  verifyToken + verifyCustomer (owner) -> rate a PAID job, once (optional feature)
  *   GET   /api/bookings/technician  verifyToken + verifyTechnician -> my jobs (?status= filter)
  *   PATCH /api/bookings/:id/status  verifyToken + verifyTechnician (owner) -> move the job forward (Challenge 3)
  */
@@ -10,7 +11,8 @@ import { Router, type Request, type Response } from "express";
 import { getCollections } from "../config/db";
 import { verifyCustomer, verifyTechnician, verifyToken } from "../middlewares/auth";
 import { toObjectId } from "../utils/objectId";
-import { validateBookingInput } from "../utils/validate";
+import { validateBookingInput, validateReviewInput } from "../utils/validate";
+import { updateServiceRating } from "../utils/rating";
 import { ACTIVE_STATUSES, canChangeStatus, withArticle } from "../utils/statusRules";
 import type { BookingDoc, BookingStatus } from "../types";
 
@@ -125,6 +127,51 @@ router.patch("/:id/cancel", verifyToken, verifyCustomer, async (req: Request, re
     return;
   }
   res.json({ success: true, message: "Request cancelled" });
+});
+// Rating & Review: only the customer of a PAID job, and only once
+router.patch("/:id/review", verifyToken, verifyCustomer, async (req: Request, res: Response) => {
+  const _id = toObjectId(req.params.id);
+  if (!_id) {
+    res.status(400).json({ message: "Invalid booking id" });
+    return;
+  }
+  const { data, error } = validateReviewInput(req.body);
+  if (error || !data) {
+    res.status(400).json({ message: error });
+    return;
+  }
+
+  const { bookings } = await getCollections();
+  const booking = await bookings.findOne({ _id });
+  if (!booking) {
+    res.status(404).json({ message: "Booking not found" });
+    return;
+  }
+  if (booking.customerEmail !== req.user!.email) {
+    res.status(403).json({ message: "Forbidden: this is not your booking" });
+    return;
+  }
+  if (booking.paymentStatus !== "paid") {
+    res.status(400).json({ message: "You can review a job after paying for it" });
+    return;
+  }
+  if (booking.rating) {
+    res.status(409).json({ message: "You have already reviewed this job" });
+    return;
+  }
+
+  // "rating does not exist" in the filter makes this a one-time write (double click safe)
+  const result = await bookings.updateOne(
+    { _id, paymentStatus: "paid", rating: { $exists: false } },
+    { $set: { rating: data.rating, review: data.review, reviewedAt: new Date() } }
+  );
+  if (result.modifiedCount === 0) {
+    res.status(409).json({ message: "You have already reviewed this job" });
+    return;
+  }
+
+  await updateServiceRating(booking.serviceId);
+  res.json({ success: true, message: "Thanks for your review!" });
 });
 
 /* ------------------------------- Technician ------------------------------- */

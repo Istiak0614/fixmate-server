@@ -137,3 +137,18 @@ export function validateProfileInput(body: Record<string, unknown> | undefined):
   // image is only changed when a new one was uploaded
   return { data: { name, phone, area, bio, ...(image && { image }) } };
 }
+/* ------------------------- Rating & Review (optional feature) ------------------------- */
+
+export type ReviewInput = { rating: number; review: string };
+
+export function validateReviewInput(body: Record<string, unknown> | undefined): {
+  data?: ReviewInput;
+  error?: string;
+} {
+  const rating = Number(body?.rating);
+  const review = text(body?.review);
+
+  if (!Number.isInteger(rating) || rating < 1 || rating > 5) return { error: "Choose a rating from 1 to 5 stars" };
+  if (review.length < 10 || review.length > 500) return { error: "Review must be 10 to 500 characters" };
+  return { data: { rating, review } };
+}

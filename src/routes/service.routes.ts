@@ -4,6 +4,7 @@
  *   GET    /api/services/featured          public -> 6 latest approved + available (Home page)
  *   GET    /api/services/mine              verifyToken + verifyTechnician -> my services
  *   GET    /api/services/:id               public -> details + technician summary (404 if not public)
+ *   GET    /api/services/:id/reviews       public -> latest reviews of a service (optional feature)
  *   POST   /api/services                   verifyToken + verifyTechnician -> add (always "pending")
  *   PATCH  /api/services/:id               verifyToken + verifyTechnician (owner) -> edit, back to "pending"
  *   PATCH  /api/services/:id/availability  verifyToken + verifyTechnician (owner) -> turn on/off
@@ -82,6 +83,42 @@ router.get("/featured", async (_req: Request, res: Response) => {
     .limit(6)
     .toArray();
   res.json(featured);
+});
+// Reviews of a public service, newest first. Only the first name is shown (no emails leave the server).
+router.get("/:id/reviews", async (req: Request, res: Response) => {
+  const _id = toObjectId(req.params.id);
+  const { services, bookings, users } = await getCollections();
+  const service = _id ? await services.findOne({ _id, approvalStatus: "approved", isAvailable: true }, { projection: { _id: 1 } }) : null;
+  if (!service) {
+    res.status(404).json({ message: "Service not found" });
+    return;
+  }
+
+  const reviewed = await bookings
+    .find(
+      { serviceId: req.params.id, rating: { $exists: true } },
+      { projection: { customerName: 1, customerEmail: 1, rating: 1, review: 1, reviewedAt: 1 } }
+    )
+    .sort({ reviewedAt: -1 })
+    .limit(20)
+    .toArray();
+
+  // Current profile photos of the reviewers (one query for all of them)
+  const people = await users
+    .find({ email: { $in: reviewed.map((b) => b.customerEmail) } }, { projection: { email: 1, image: 1 } })
+    .toArray();
+  const photoOf = new Map(people.map((u) => [u.email, u.image ?? null]));
+
+  res.json(
+    reviewed.map((b) => ({
+      _id: b._id,
+      name: b.customerName.split(" ")[0],
+      image: photoOf.get(b.customerEmail) ?? null,
+      rating: b.rating,
+      review: b.review,
+      reviewedAt: b.reviewedAt,
+    }))
+  );
 });
 
 /* ------------------------------- Technician ------------------------------- */
