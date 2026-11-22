@@ -13,7 +13,8 @@
  *               (scrypt N=16384 r=16 p=1, 64 bytes, "salt:key" in hex)
  *
  * Safe to run again: every seed document has a FIXED _id (made from a name), so a second run
- * replaces the same documents instead of adding copies. Real users' data is never touched.
+ * replaces the same documents instead of adding copies. A seeded service that was deleted by
+ * accident comes back. Real users' data is never touched.
  *
  * Needs in .env: MONGODB_URI, DB_NAME, SEED_ADMIN_EMAIL, SEED_ADMIN_PASSWORD, SEED_DEMO_PASSWORD
  */
@@ -70,6 +71,7 @@ const person = (key: string) => PEOPLE.find((p) => p.key === key)!;
 
 /* -------------------------------- services -------------------------------- */
 
+/** Unsplash photo id -> resized image URL (images.unsplash.com is allowed in the client's next.config.ts). */
 const img = (id: string) => `https://images.unsplash.com/${id}?auto=format&fit=crop&w=1200&q=70`;
 
 type SeedService = {
@@ -83,16 +85,19 @@ const SERVICES: SeedService[] = [
   { key: "phone-charging", tech: "tech-rafi", title: "Charging Port & Water Damage Repair", category: "Smartphone", price: 25, duration: "Same day", mode: "Home Visit", area: "Dhanmondi & Lalmatia", image: img("photo-1556656793-08538906a9f8"), description: "Loose cable, slow charging or a phone that fell in water. I clean the board, replace the port if needed and give you an honest report of what can be saved." },
   { key: "laptop-service", tech: "tech-rafi", title: "Laptop Cleaning & Thermal Paste", category: "Laptop & PC", price: 30, duration: "2 hours", mode: "Home Visit", area: "Dhanmondi, Dhaka", image: img("photo-1496181133206-80ce9b88a853"), description: "Laptop running hot, loud fan, random shutdowns? Full internal cleaning, fresh thermal paste and a temperature test. Your laptop runs cooler and faster." },
   { key: "laptop-os", tech: "tech-rafi", title: "Windows Reinstall & SSD Upgrade", category: "Laptop & PC", price: 45, duration: "3 hours", mode: "Shop Drop-off", area: "Dhanmondi, Dhaka", image: img("photo-1517336714731-489689fd1ca8"), description: "Slow PC? I move you to an SSD, reinstall Windows with drivers and back up your files first. Price includes labour; the SSD is quoted separately." },
-  { key: "ac-service", tech: "tech-sumaiya", title: "AC General Servicing", category: "AC", price: 25, duration: "1.5 hours", mode: "Home Visit", area: "Mirpur & Pallabi", image: img("photo-1631545806609-35d4ae440431"), description: "Jet wash of the indoor and outdoor units, filter and drain cleaning, and a gas pressure check. Ideal before summer for cooler air and lower bills." },
+  // FIXED image: white split AC indoor unit (Yucel M, Unsplash)
+  { key: "ac-service", tech: "tech-sumaiya", title: "AC General Servicing", category: "AC", price: 25, duration: "1.5 hours", mode: "Home Visit", area: "Mirpur & Pallabi", image: img("photo-1726614846573-c1ac2e6161d1"), description: "Jet wash of the indoor and outdoor units, filter and drain cleaning, and a gas pressure check. Ideal before summer for cooler air and lower bills." },
   { key: "ac-gas", tech: "tech-sumaiya", title: "AC Gas Refill & Leak Fix", category: "AC", price: 55, duration: "2-3 hours", mode: "Home Visit", area: "Mirpur, Dhaka", image: img("photo-1621905251918-48416bd8575a"), description: "AC running but not cooling? I find and seal the leak first, then refill R32/R410 gas to the right pressure. A leak test is included." },
   { key: "fridge-repair", tech: "tech-sumaiya", title: "Refrigerator Cooling Repair", category: "Refrigerator", price: 40, duration: "2 hours", mode: "Home Visit", area: "Mirpur & Kafrul", image: img("photo-1571175443880-49e1d25b2bc5"), description: "Fridge not cooling, freezer icing up or a noisy compressor. Thermostat, fan and relay checks with a written diagnosis before any part is replaced." },
   { key: "fridge-gas", tech: "tech-sumaiya", title: "Fridge Gas Charge & Compressor Check", category: "Refrigerator", price: 50, duration: "3 hours", mode: "Home Visit", area: "Mirpur, Dhaka", image: img("photo-1584568694244-14fbdf83bd30"), description: "Full gas charge with a vacuum and leak test, plus a compressor health check. Works for single and double-door refrigerators of all common brands." },
   { key: "tv-repair", tech: "tech-tanvir", title: "LED TV Display & Board Repair", category: "TV", price: 45, duration: "Same day", mode: "Home Visit", area: "Uttara, Dhaka", image: img("photo-1593359677879-a4bb92f829d1"), description: "No picture, lines on the screen or no power? I repair backlights, power boards and mainboards for Samsung, LG, Sony and Walton TVs." },
   { key: "washer", tech: "tech-tanvir", title: "Washing Machine Repair", category: "Washing Machine", price: 35, duration: "2 hours", mode: "Home Visit", area: "Uttara & Airport", image: img("photo-1626806787461-102c1bfaaea1"), description: "Not draining, not spinning or leaking water? Front and top loaders: pumps, belts, door locks and control boards repaired at your home." },
   { key: "wiring", tech: "tech-sumaiya", title: "Home Wiring & Switchboard Fix", category: "Electrical", price: 20, duration: "1-2 hours", mode: "Home Visit", area: "Mirpur, Dhaka", image: img("photo-1621905252507-b35492cc74b4"), description: "Sparking switches, tripping breakers or new sockets. Safe, tidy wiring work with quality cables. Free safety check of your main board." },
-  { key: "fan-light", tech: "tech-sumaiya", title: "Ceiling Fan & Light Installation", category: "Electrical", price: 15, duration: "1 hour", mode: "Home Visit", area: "Mirpur & Pallabi", image: img("photo-1558002038-1055907df827"), description: "New fan, light or regulator installed and tested. Bring your own fixtures or I can source them. Old fittings removed for you." },
+  // FIXED image: ceiling fan (Muhammad Tayyab, Unsplash)
+  { key: "fan-light", tech: "tech-sumaiya", title: "Ceiling Fan & Light Installation", category: "Electrical", price: 15, duration: "1 hour", mode: "Home Visit", area: "Mirpur & Pallabi", image: img("photo-1716913015560-a231400ce141"), description: "New fan, light or regulator installed and tested. Bring your own fixtures or I can source them. Old fittings removed for you." },
   { key: "pc-build", tech: "tech-rafi", title: "Desktop PC Troubleshooting", category: "Laptop & PC", price: 30, duration: "2 hours", mode: "Shop Drop-off", area: "Dhanmondi, Dhaka", image: img("photo-1587202372775-e229f172b9d7"), description: "PC not turning on, blue screens or random restarts. Power supply, RAM and storage testing with a clear list of what needs fixing." },
-  { key: "ac-install", tech: "tech-sumaiya", title: "Split AC Installation", category: "AC", price: 60, duration: "4 hours", mode: "Home Visit", area: "Mirpur, Dhaka", image: img("photo-1585338447937-7082f8fc763d"), description: "New split AC installed with proper piping, vacuuming and a neat wall finish. Includes the first gas pressure check after one week." },
+  // FIXED image: white split AC mounted on a wall (Illia Horokhovsky, Unsplash)
+  { key: "ac-install", tech: "tech-sumaiya", title: "Split AC Installation", category: "AC", price: 60, duration: "4 hours", mode: "Home Visit", area: "Mirpur, Dhaka", image: img("photo-1759772238012-9d5ad59ae637"), description: "New split AC installed with proper piping, vacuuming and a neat wall finish. Includes the first gas pressure check after one week." },
   // not public: show up in the admin's Service Approval page
   { key: "tv-wallmount", tech: "tech-tanvir", title: "TV Wall Mount Setup", category: "TV", price: 15, duration: "1 hour", mode: "Home Visit", area: "Uttara, Dhaka", image: img("photo-1601944179066-29786cb9d32a"), description: "Wall mount installation for TVs up to 75 inches, with hidden cables and a level check. Bracket can be supplied if you need one.", approval: "pending" },
   { key: "phone-unlock", tech: "tech-rafi", title: "Phone Software Unlock", category: "Smartphone", price: 10, duration: "30 minutes", mode: "Shop Drop-off", area: "Dhanmondi, Dhaka", image: img("photo-1585060544812-6b45742d762f"), description: "Software flashing for phones stuck on the logo screen. Only for phones you own, with proof of purchase required at the shop.", approval: "rejected" },
@@ -194,7 +199,7 @@ async function main() {
   }
   console.log(`✅ ${PEOPLE.length} users (1 admin, 3 technicians, 3 customers)`);
 
-  /* 2. services */
+  /* 2. services (upsert: a deleted seed service is created again) */
   for (const [i, s] of SERVICES.entries()) {
     const tech = person(s.tech);
     await services.replaceOne(
